@@ -1,0 +1,100 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ site_settings.node_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/portal.css' %}">
+  <style>
+    :root {
+      --primary: {{ site_settings.primary_color }};
+      --primary-dark: {{ site_settings.accent_color }};
+      --sidebar-bg: {{ site_settings.sidebar_color }};
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      {% if site_settings.logo %}
+        <img src="{{ site_settings.logo.url }}" alt="{{ site_settings.node_name }}" class="sidebar-logo-img" style="height:48px;width:auto;max-width:160px;border-radius:8px;object-fit:contain;">
+      {% else %}
+        <div class="sidebar-logo-icon">📡</div>
+      {% endif %}
+      <div>
+        <div class="sidebar-logo-name">{{ site_settings.node_name }}</div>
+        <div class="sidebar-logo-sub">{{ site_settings.tagline }}</div>
+      </div>
+    </div>
+
+    <!-- Search (mobile) -->
+    <form class="sidebar-search" action="{% url 'portal:search' %}" method="get">
+      <input type="search" name="q" placeholder="🔍  Search content..."
+             value="{{ search_query|default:'' }}" autocomplete="off">
+    </form>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'portal:home' %}" class="nav-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+        <span class="nav-icon">🏠</span> Dashboard
+      </a>
+      <a href="{% url 'portal:recent' %}" class="nav-item {% if request.resolver_match.url_name == 'recent' %}active{% endif %}">
+        <span class="nav-icon">🕐</span> Recent
+      </a>
+    </nav>
+
+    {% if all_categories %}
+    <div class="sidebar-section-title">LIBRARY</div>
+    <nav class="sidebar-nav">
+      {% for cat in all_categories %}
+      <a href="{% url 'portal:category' cat.slug %}"
+         class="nav-item {% if request.resolver_match.kwargs.slug == cat.slug %}active{% endif %}">
+        <span class="nav-icon">{% if cat.file_type_icon %}{{ cat.icon }}{% else %}{{ cat.icon }}{% endif %}</span>
+        {{ cat.name }}
+        {% if cat.item_count %}<span class="nav-badge">{{ cat.item_count }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+
+    <div class="sidebar-storage">
+      <div class="storage-label">STORAGE</div>
+      <div class="storage-bar-wrap">
+        <div class="storage-bar" id="storage-bar"></div>
+      </div>
+      <div class="storage-text" id="storage-text">Loading…</div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <div class="sidebar-theme-toggle">
+      <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle theme">
+        <span class="theme-icon theme-icon-light">☀️</span>
+        <span class="theme-icon theme-icon-dark">🌙</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="main-wrap">
+    <!-- Top bar (desktop search) -->
+    <header class="topbar">
+      <form class="topbar-search" action="{% url 'portal:search' %}" method="get">
+        <input type="search" name="q" placeholder="🔍  Search content..."
+               value="{{ search_query|default:'' }}" autocomplete="off">
+      </form>
+    </header>
+
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<script src="{% static 'js/portal.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

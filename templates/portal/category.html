@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ category.name }} — {{ node_name }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-icon">{{ category.icon }}</div>
+  <div>
+    <h1 class="page-title">{{ category.name }}</h1>
+    {% if category.description %}<p class="page-sub">{{ category.description }}</p>{% endif %}
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar">
+  <form method="get" class="filter-form">
+    <input type="search" name="q" value="{{ search_query }}" placeholder="Search in {{ category.name }}…" class="filter-input">
+    <select name="type" class="filter-select" onchange="this.form.submit()">
+      <option value="">All types</option>
+      <option value="video" {% if active_type == 'video' %}selected{% endif %}>🎬 Video</option>
+      <option value="audio" {% if active_type == 'audio' %}selected{% endif %}>🎵 Audio</option>
+      <option value="document" {% if active_type == 'document' %}selected{% endif %}>📄 Document</option>
+      <option value="image" {% if active_type == 'image' %}selected{% endif %}>🖼️ Image</option>
+      <option value="software" {% if active_type == 'software' %}selected{% endif %}>💾 Software</option>
+    </select>
+    <button type="submit" class="btn-primary">Search</button>
+  </form>
+</div>
+
+{% if items %}
+<div class="item-grid">
+  {% for item in items %}
+  <a href="{% url 'portal:item_detail' item.pk %}" class="item-card">
+    <div class="item-thumb">
+      {% if item.thumbnail %}
+        <img src="{{ item.thumbnail.url }}" alt="{{ item.title }}" loading="lazy">
+      {% else %}
+        <div class="item-thumb-placeholder">
+          {% if item.file_type == 'video' %}🎬
+          {% elif item.file_type == 'audio' %}🎵
+          {% elif item.file_type == 'document' %}📄
+          {% elif item.file_type == 'image' %}🖼️
+          {% elif item.file_type == 'software' %}💾
+          {% else %}📁{% endif %}
+        </div>
+      {% endif %}
+      <div class="item-type-badge {{ item.file_type }}">{{ item.get_file_type_display }}</div>
+    </div>
+    <div class="item-info">
+      <div class="item-title">{{ item.title }}</div>
+      <div class="item-meta">
+        {{ item.formatted_size }}
+        {% if item.year %} &bull; {{ item.year }}{% endif %}
+        {% if item.duration %} &bull; {{ item.duration }}{% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🔍</div>
+  <p>{% if search_query %}No results for "{{ search_query }}"{% else %}No content in this category yet{% endif %}</p>
+</div>
+{% endif %}
+
+{% endblock %}

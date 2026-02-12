@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} — {{ node_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">{{ page_title }}</h1>
+</div>
+{% if items %}
+<div class="item-grid">
+  {% for item in items %}
+  <a href="{% url 'portal:item_detail' item.pk %}" class="item-card">
+    <div class="item-thumb">
+      {% if item.thumbnail %}<img src="{{ item.thumbnail.url }}" alt="{{ item.title }}" loading="lazy">
+      {% else %}
+      <div class="item-thumb-placeholder">
+        {% if item.file_type == 'video' %}🎬{% elif item.file_type == 'audio' %}🎵{% elif item.file_type == 'document' %}📄{% else %}📁{% endif %}
+      </div>{% endif %}
+      <div class="item-type-badge {{ item.file_type }}">{{ item.get_file_type_display }}</div>
+    </div>
+    <div class="item-info">
+      <div class="item-title">{{ item.title }}</div>
+      <div class="item-meta">{{ item.category.icon }} {{ item.category.name }} &bull; {{ item.formatted_size }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state"><div class="empty-icon">📂</div><p>Nothing here yet.</p></div>
+{% endif %}
+{% endblock %}

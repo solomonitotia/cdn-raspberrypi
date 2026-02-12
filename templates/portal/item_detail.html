@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ item.title }} — {{ node_name }}{% endblock %}
+
+{% block content %}
+
+<div class="detail-layout">
+
+  <!-- Player / Viewer -->
+  <div class="detail-main">
+    <div class="player-wrap">
+      {% if item.file_type == 'video' %}
+        <video controls autoplay class="media-player" preload="metadata">
+          <source src="{{ item.file.url }}">
+          Your browser does not support video.
+        </video>
+
+      {% elif item.file_type == 'audio' %}
+        {% if item.thumbnail %}
+          <img src="{{ item.thumbnail.url }}" class="audio-cover" alt="{{ item.title }}">
+        {% else %}
+          <div class="audio-cover-placeholder">🎵</div>
+        {% endif %}
+        <audio controls autoplay class="audio-player">
+          <source src="{{ item.file.url }}">
+        </audio>
+
+      {% elif item.file_type == 'image' %}
+        <img src="{{ item.file.url }}" class="image-viewer" alt="{{ item.title }}">
+
+      {% elif item.file_type == 'document' and item.file_extension == '.pdf' %}
+        <iframe src="{{ item.file.url }}" class="pdf-viewer" title="{{ item.title }}"></iframe>
+
+      {% else %}
+        <div class="no-preview">
+          <div class="no-preview-icon">
+            {% if item.file_type == 'software' %}💾{% else %}📁{% endif %}
+          </div>
+          <p>No preview available</p>
+          <a href="{{ item.file.url }}" class="btn-primary" download="{{ item.title }}">
+            ⬇ Download {{ item.title }}
+          </a>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Info -->
+    <div class="detail-info">
+      <div class="detail-badges">
+        <span class="type-badge {{ item.file_type }}">{{ item.get_file_type_display }}</span>
+        <span class="cat-badge">{{ item.category.icon }} {{ item.category.name }}</span>
+        {% if item.year %}<span class="year-badge">{{ item.year }}</span>{% endif %}
+      </div>
+      <h1 class="detail-title">{{ item.title }}</h1>
+      {% if item.description %}<p class="detail-desc">{{ item.description }}</p>{% endif %}
+      <div class="detail-meta">
+        <span>{{ item.formatted_size }}</span>
+        {% if item.duration %}<span>⏱ {{ item.duration }}</span>{% endif %}
+        <span>{{ item.downloads }} view{{ item.downloads|pluralize }}</span>
+      </div>
+      {% if item.tag_list %}
+      <div class="detail-tags">
+        {% for tag in item.tag_list %}
+        <span class="tag">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="detail-actions">
+        <a href="{{ item.file.url }}" class="btn-primary" download="{{ item.title }}">⬇ Download</a>
+        <a href="{% url 'portal:category' item.category.slug %}" class="btn-ghost">← Back to {{ item.category.name }}</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Related content -->
+  {% if related %}
+  <aside class="detail-sidebar">
+    <h3 class="sidebar-heading">More in {{ item.category.name }}</h3>
+    <div class="related-list">
+      {% for r in related %}
+      <a href="{% url 'portal:item_detail' r.pk %}" class="related-item">
+        <div class="related-thumb">
+          {% if r.thumbnail %}<img src="{{ r.thumbnail.url }}" alt="{{ r.title }}">
+          {% else %}<div class="related-thumb-ph">{% if r.file_type == 'video' %}🎬{% elif r.file_type == 'audio' %}🎵{% else %}📄{% endif %}</div>
+          {% endif %}
+        </div>
+        <div class="related-info">
+          <div class="related-title">{{ r.title }}</div>
+          <div class="related-meta">{{ r.formatted_size }}{% if r.year %} &bull; {{ r.year }}{% endif %}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </aside>
+  {% endif %}
+
+</div>
+{% endblock %}
