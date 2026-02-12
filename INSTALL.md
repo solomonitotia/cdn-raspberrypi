@@ -1,14 +1,47 @@
 # 🚀 Easy Installation Guide
 
-## For Non-Technical Users (Recommended)
+## Method 1: Fully Automated (Zero Interaction)
 
-Just run this **single command** on your Raspberry Pi:
+Run this **single command** with your settings:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/easy-install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/auto-install.sh | \
+  sudo CDN_NODE_NAME="My Network" CDN_ADMIN_PASSWORD="YourSecurePass123" bash
 ```
 
-That's it! The installer will:
+Or with all options:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/auto-install.sh | \
+  sudo CDN_NODE_NAME="Athi Community Network" \
+       CDN_NODE_TAGLINE="Free offline content" \
+       CDN_ADMIN_PASSWORD="SecurePass123" \
+       CDN_PORT="8282" \
+       CDN_MEDIA_ROOT="/mnt/usb/cdn-media" \
+  bash
+```
+
+✅ **No questions asked** - fully automatic!
+✅ **Time required:** 5-10 minutes
+
+---
+
+## Method 2: Interactive Installer
+
+Download the script first, then run it (allows interactive prompts):
+
+```bash
+# Download the script
+wget https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/easy-install.sh
+
+# Make it executable
+chmod +x easy-install.sh
+
+# Run it
+sudo ./easy-install.sh
+```
+
+The installer will:
 - ✅ Ask you simple questions (node name, password, etc.)
 - ✅ Install everything automatically
 - ✅ Set up the portal to start on boot

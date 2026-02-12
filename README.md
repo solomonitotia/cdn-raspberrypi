@@ -27,21 +27,36 @@ A Django-powered offline content delivery network (CDN) for community networks. 
 
 ## 🚀 Quick Start
 
-### **Option 1: Easy Installation (Recommended for Non-Technical Users)**
+### **Option 1: Fully Automated Install (Zero Interaction)**
 
-Run this **single command** on your Raspberry Pi:
+Run this **single command** with your settings:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/easy-install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/auto-install.sh | \
+  sudo CDN_NODE_NAME="My Network" CDN_ADMIN_PASSWORD="YourSecurePass123" bash
 ```
 
-The installer will ask you simple questions and set everything up automatically in 5-10 minutes!
+✅ **No questions asked** - fully automatic!
+
+---
+
+### **Option 2: Interactive Install (With Prompts)**
+
+Download and run the interactive installer:
+
+```bash
+wget https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/easy-install.sh
+chmod +x easy-install.sh
+sudo ./easy-install.sh
+```
+
+✅ **Asks simple questions** - great for first-time users!
 
 📖 **[Full Installation Guide →](INSTALL.md)**
 
 ---
 
-### **Option 2: Manual Installation (For Advanced Users)**
+### **Option 3: Manual Installation (For Advanced Users)**
 
 ```bash
 # Clone the repository

@@ -1,0 +1,309 @@
+#!/bin/bash
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║     CDN Portal — Fully Automated Installer (No Interaction Required)    ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# Usage with environment variables:
+#   sudo CDN_NODE_NAME="My Network" CDN_ADMIN_PASSWORD="SecurePass123" bash auto-install.sh
+#
+# Or with curl (one-liner):
+#   curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/auto-install.sh | \
+#     sudo CDN_NODE_NAME="My Network" CDN_ADMIN_PASSWORD="SecurePass123" bash
+#
+# Environment variables (all optional, have defaults):
+#   CDN_NODE_NAME         - Network name (default: "Community CDN Node")
+#   CDN_NODE_TAGLINE      - Tagline (default: "by Community Networks")
+#   CDN_ADMIN_PASSWORD    - Admin password (default: "admin123")
+#   CDN_PORT              - Port number (default: 8282)
+#   CDN_MEDIA_ROOT        - Media storage path (default: /var/cdn-media)
+#   CDN_PLATFORM_URL      - Platform URL (optional)
+#   CDN_API_KEY           - Platform API key (optional)
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log()   { echo -e "${GREEN}✓${NC} $1"; }
+warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
+error() { echo -e "${RED}✗${NC} $1"; exit 1; }
+info()  { echo -e "${CYAN}ℹ${NC} $1"; }
+
+clear
+echo -e "${CYAN}${BOLD}"
+cat << "EOF"
+  ╔════════════════════════════════════════════════════════╗
+  ║                                                        ║
+  ║     🌐  CDN Portal - Automated Installer              ║
+  ║                                                        ║
+  ║     Fully automated setup (no interaction needed)     ║
+  ║                                                        ║
+  ╚════════════════════════════════════════════════════════╝
+EOF
+echo -e "${NC}"
+
+# Check root
+[ "$EUID" -ne 0 ] && error "Run as root: sudo bash $0"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Configuration (from environment or defaults)
+# ═══════════════════════════════════════════════════════════════════════════
+
+NODE_NAME="${CDN_NODE_NAME:-Community CDN Node}"
+TAGLINE="${CDN_NODE_TAGLINE:-by Community Networks}"
+ADMIN_PASSWORD="${CDN_ADMIN_PASSWORD:-admin123}"
+PORT="${CDN_PORT:-8282}"
+MEDIA_ROOT="${CDN_MEDIA_ROOT:-/var/cdn-media}"
+PLATFORM_URL="${CDN_PLATFORM_URL:-}"
+API_KEY="${CDN_API_KEY:-}"
+
+INSTALL_DIR="/opt/cdn-portal"
+SERVICE_USER="cdnportal"
+
+# Show configuration
+echo -e "${CYAN}${BOLD}Configuration:${NC}"
+echo -e "  Node Name:      ${BOLD}$NODE_NAME${NC}"
+echo -e "  Tagline:        $TAGLINE"
+echo -e "  Admin Password: ${BOLD}********${NC} (${#ADMIN_PASSWORD} characters)"
+echo -e "  Port:           $PORT"
+echo -e "  Media Storage:  $MEDIA_ROOT"
+echo -e "  Platform URL:   ${PLATFORM_URL:-Not configured}"
+echo ""
+
+if [ ${#ADMIN_PASSWORD} -lt 8 ]; then
+    warn "Password is short (${#ADMIN_PASSWORD} chars). Recommend 8+ characters."
+    warn "Using default password 'admin123' - CHANGE THIS AFTER INSTALLATION!"
+    ADMIN_PASSWORD="admin123"
+fi
+
+sleep 2
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Installation Steps
+# ═══════════════════════════════════════════════════════════════════════════
+
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Installing System Dependencies${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+info "Updating package list..."
+apt-get update -qq
+
+info "Installing Python and dependencies..."
+apt-get install -y -qq python3 python3-pip python3-venv git curl libffi-dev libjpeg-dev zlib1g-dev
+
+log "Dependencies installed"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Downloading Portal Code${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+mkdir -p "$INSTALL_DIR"
+
+if [ -f "$(dirname "$0")/../manage.py" ]; then
+    info "Copying from local repository..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+    cp -r "$PROJECT_DIR"/* "$INSTALL_DIR/"
+else
+    info "Cloning from GitHub..."
+    git clone https://github.com/solomonitotia/cdn-raspberrypi.git "$INSTALL_DIR" 2>&1 | grep -v "^Cloning" || true
+fi
+
+log "Portal code downloaded"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Creating System User${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+if ! id "$SERVICE_USER" &>/dev/null; then
+    useradd -r -m -s /bin/bash -d "$INSTALL_DIR" "$SERVICE_USER"
+    log "User '$SERVICE_USER' created"
+else
+    info "User '$SERVICE_USER' already exists"
+fi
+
+mkdir -p "$MEDIA_ROOT" /var/log/cdn-portal
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" "$MEDIA_ROOT" /var/log/cdn-portal
+chmod 755 "$MEDIA_ROOT"
+
+log "Permissions configured"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Installing Python Packages${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+cd "$INSTALL_DIR"
+python3 -m venv venv
+source venv/bin/activate
+
+info "Installing packages (this may take 2-3 minutes)..."
+pip install --upgrade pip -q 2>&1 | grep -v "^Requirement" || true
+pip install -r requirements.txt -q 2>&1 | grep -v "^Requirement" || true
+
+log "Python packages installed"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Configuring Portal${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(40))')
+
+if [ -f /sys/class/net/eth0/address ]; then
+    NODE_ID="pi-$(cat /sys/class/net/eth0/address | tr -d ':')"
+elif [ -f /sys/class/net/wlan0/address ]; then
+    NODE_ID="pi-$(cat /sys/class/net/wlan0/address | tr -d ':')"
+else
+    NODE_ID="pi-$(hostname)"
+fi
+
+cat > "$INSTALL_DIR/.env" <<EOF
+SECRET_KEY=$SECRET_KEY
+DEBUG=False
+ALLOWED_HOSTS=*
+CDN_NODE_NAME=$NODE_NAME
+CDN_NODE_TAGLINE=$TAGLINE
+CDN_NODE_IDENTIFIER=$NODE_ID
+MEDIA_ROOT=$MEDIA_ROOT
+CDN_PLATFORM_URL=${PLATFORM_URL:-}
+CDN_API_KEY=${API_KEY:-}
+EOF
+
+chmod 600 "$INSTALL_DIR/.env"
+chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
+
+log "Configuration saved"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Setting Up Database${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+cd "$INSTALL_DIR"
+source venv/bin/activate
+set -a; source .env; set +a
+
+info "Running migrations..."
+python manage.py migrate --no-input 2>&1 | grep -E "Applying|OK|Running" || true
+
+info "Collecting static files..."
+python manage.py collectstatic --no-input -v 0 2>&1 > /dev/null
+
+info "Creating admin user..."
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+if not User.objects.filter(username='admin').exists():
+    User.objects.create_superuser('admin', 'admin@localhost', '$ADMIN_PASSWORD')
+    print('✓ Admin user created')
+else:
+    print('ℹ Admin user already exists')
+" 2>&1 | tail -1
+
+log "Database ready"
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Installing System Service${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+cat > /etc/systemd/system/cdn-portal.service <<EOF
+[Unit]
+Description=Community CDN Portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+EnvironmentFile=$INSTALL_DIR/.env
+ExecStart=$INSTALL_DIR/venv/bin/gunicorn \\
+    --workers 2 \\
+    --bind 0.0.0.0:$PORT \\
+    --timeout 120 \\
+    --access-logfile /var/log/cdn-portal/access.log \\
+    --error-logfile /var/log/cdn-portal/error.log \\
+    cdnnode.wsgi:application
+Restart=always
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$MEDIA_ROOT /var/log/cdn-portal $INSTALL_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable cdn-portal.service 2>&1 > /dev/null
+systemctl restart cdn-portal.service
+
+sleep 3
+
+if systemctl is-active --quiet cdn-portal.service; then
+    log "Service started successfully"
+else
+    warn "Service may have issues. Check logs: sudo journalctl -u cdn-portal -n 50"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Success Message
+# ═══════════════════════════════════════════════════════════════════════════
+
+LOCAL_IP=$(hostname -I | awk '{print $1}')
+
+clear
+echo -e "${GREEN}${BOLD}"
+cat << "EOF"
+  ╔════════════════════════════════════════════════════════╗
+  ║                                                        ║
+  ║     ✅  Installation Complete! 🎉                     ║
+  ║                                                        ║
+  ╚════════════════════════════════════════════════════════╝
+EOF
+echo -e "${NC}"
+echo ""
+echo -e "${CYAN}${BOLD}📱 Access Your Portal:${NC}"
+echo -e "   ${BOLD}Portal:${NC}          http://$LOCAL_IP:$PORT"
+echo -e "   ${BOLD}Admin Panel:${NC}     http://$LOCAL_IP:$PORT/admin"
+echo ""
+echo -e "${CYAN}${BOLD}🔑 Admin Credentials:${NC}"
+echo -e "   ${BOLD}Username:${NC}        admin"
+echo -e "   ${BOLD}Password:${NC}        $ADMIN_PASSWORD"
+echo ""
+
+if [ "$ADMIN_PASSWORD" = "admin123" ]; then
+    echo -e "${YELLOW}${BOLD}⚠️  IMPORTANT: Change the default password!${NC}"
+    echo -e "   Visit: http://$LOCAL_IP:$PORT/admin/password_change/"
+    echo ""
+fi
+
+echo -e "${CYAN}${BOLD}🛠️ Useful Commands:${NC}"
+echo -e "   Check status:    ${BOLD}sudo systemctl status cdn-portal${NC}"
+echo -e "   View logs:       ${BOLD}sudo journalctl -u cdn-portal -f${NC}"
+echo -e "   Restart:         ${BOLD}sudo systemctl restart cdn-portal${NC}"
+echo ""
+echo -e "${GREEN}Setup complete! Your portal is ready to use. 🌐${NC}"
+echo ""
