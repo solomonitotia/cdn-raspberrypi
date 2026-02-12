@@ -4,6 +4,8 @@ from django import forms
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from .models import Category, ContentItem, SiteSettings, Announcement, ICON_CHOICES
+import os
+import shutil
 
 
 class ColorPickerWidget(forms.TextInput):
@@ -125,10 +127,92 @@ class ContentItemAdmin(admin.ModelAdmin):
         queryset.update(is_active=False)
 
 
+class DrivePickerWidget(forms.TextInput):
+    """Text input with a list of detected mounted drives shown as clickable buttons."""
+
+    def _fmt(self, size):
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} PB"
+
+    def _detect_drives(self):
+        drives = []
+        for base in ['/mnt', '/media']:
+            if not os.path.exists(base):
+                continue
+            try:
+                for entry in os.scandir(base):
+                    if not entry.is_dir():
+                        continue
+                    try:
+                        usage = shutil.disk_usage(entry.path)
+                        # Only list if it's a separate mount from root
+                        root_usage = shutil.disk_usage('/')
+                        if usage.total != root_usage.total:
+                            drives.append({'path': entry.path, 'free': usage.free, 'total': usage.total})
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        # Always include the default system path
+        from django.conf import settings
+        default = str(settings.MEDIA_ROOT)
+        if not any(d['path'] == default for d in drives):
+            try:
+                usage = shutil.disk_usage(default)
+                drives.insert(0, {'path': default, 'free': usage.free, 'total': usage.total, 'default': True})
+            except Exception:
+                pass
+        return drives
+
+    def render(self, name, value, attrs=None, renderer=None):
+        text_html = super().render(name, value, attrs, renderer)
+        drives = self._detect_drives()
+        uid = (attrs or {}).get('id', f'id_{name}')
+
+        if not drives:
+            drive_html = '<p style="color:#666;font-size:13px;margin:8px 0">No drives detected. Enter a path manually above.</p>'
+        else:
+            btns = []
+            for d in drives:
+                free_pct = (d['free'] / d['total'] * 100) if d['total'] else 0
+                color = '#16a34a' if free_pct > 30 else '#d97706' if free_pct > 10 else '#dc2626'
+                label = d['path']
+                if d.get('default'):
+                    label += ' (system default)'
+                btns.append(
+                    f'<button type="button" '
+                    f'onclick="var f=document.getElementById(\'{uid}\');f.value=\'{d["path"]}\';'
+                    f'this.closest(\'div\').querySelectorAll(\'button\').forEach(b=>b.style.borderColor=\'#e2e8f0\');'
+                    f'this.style.borderColor=\'#2563eb\';" '
+                    f'style="display:block;width:100%;text-align:left;padding:8px 12px;margin:4px 0;'
+                    f'border:2px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer;font-size:13px;">'
+                    f'💾 <strong>{label}</strong> &nbsp;'
+                    f'<span style="color:{color}">{self._fmt(d["free"])} free</span>'
+                    f' / {self._fmt(d["total"])} total'
+                    f'</button>'
+                )
+            drive_html = ''.join(btns)
+
+        return mark_safe(
+            text_html +
+            '<div style="margin-top:10px">'
+            '<p style="font-weight:600;font-size:13px;margin:0 0 4px;color:#374151">🔍 Detected drives — click to select:</p>'
+            + drive_html +
+            '</div>'
+        )
+
+
 class SiteSettingsForm(forms.ModelForm):
     primary_color = forms.CharField(widget=ColorPickerWidget(), label="Primary Color", help_text="Main brand color — buttons, links, active states")
     accent_color  = forms.CharField(widget=ColorPickerWidget(), label="Accent / Hover Color", help_text="Darker variant on hover/pressed states")
     sidebar_color = forms.CharField(widget=ColorPickerWidget(), label="Sidebar Background", help_text="Background color of the left sidebar")
+    media_root    = forms.CharField(widget=DrivePickerWidget(), required=False, label="Media Storage Path",
+                                    help_text="Full path where uploads are stored (e.g. /mnt/usb1). "
+                                              "Leave empty for system default. "
+                                              "⚠️ Changing this does NOT move existing files.")
 
     class Meta:
         model = SiteSettings
@@ -147,8 +231,14 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             "description": "✨ Enable auto-extract to automatically set colors from your logo, or pick colors manually using the swatches below.",
             "fields": ["auto_extract_colors", "primary_color", "accent_color", "sidebar_color"],
         }),
+        ("Media Storage", {
+            "description": "Configure where uploaded content files (videos, audio, documents) are stored. "
+                           "Point this to an external USB drive to handle large libraries. "
+                           "⚠️ Changing this path only affects NEW uploads — existing files are not moved.",
+            "fields": ["media_root", "storage_usage"],
+        }),
     ]
-    readonly_fields = ["logo_preview"]
+    readonly_fields = ["logo_preview", "storage_usage"]
 
     def has_add_permission(self, request):
         return not SiteSettings.objects.exists()
@@ -165,6 +255,29 @@ class SiteSettingsAdmin(admin.ModelAdmin):
             return format_html('<img src="{}" style="max-height:80px;border-radius:8px;margin-top:4px">', obj.logo.url)
         return mark_safe('<span style="color:#999">No logo uploaded — the emoji icon (📡) is shown.</span>')
     logo_preview.short_description = "Current Logo Preview"
+
+    def storage_usage(self, obj):
+        from portal.storage import _get_media_root
+        path = _get_media_root()
+        try:
+            usage = shutil.disk_usage(path)
+            used_pct = (usage.used / usage.total * 100) if usage.total else 0
+            bar_color = '#16a34a' if used_pct < 70 else '#d97706' if used_pct < 90 else '#dc2626'
+            fmt = lambda s: f"{s/1024**3:.1f} GB" if s >= 1024**3 else f"{s/1024**2:.0f} MB"
+            return format_html(
+                '<div style="max-width:400px">'
+                '<p style="margin:0 0 4px;font-size:13px">📂 Path: <strong>{}</strong></p>'
+                '<div style="background:#e5e7eb;border-radius:6px;height:16px;overflow:hidden">'
+                '<div style="background:{};height:100%;width:{:.1f}%"></div></div>'
+                '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'
+                '{} used &nbsp;·&nbsp; {} free &nbsp;·&nbsp; {} total</p>'
+                '</div>',
+                path, bar_color, used_pct,
+                fmt(usage.used), fmt(usage.free), fmt(usage.total)
+            )
+        except Exception:
+            return format_html('<span style="color:#999">Path not accessible: {}</span>', path)
+    storage_usage.short_description = "Current Storage Usage"
 
 
 @admin.register(Announcement)

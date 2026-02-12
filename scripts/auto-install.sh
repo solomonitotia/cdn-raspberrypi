@@ -51,13 +51,15 @@ echo -e "${NC}"
 # Check root
 [ "$EUID" -ne 0 ] && error "Run as root: sudo bash $0"
 
+# Ensure we have a valid working directory (can fail when piped via curl)
+cd /root 2>/dev/null || cd /tmp
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration (from environment or defaults)
 # ═══════════════════════════════════════════════════════════════════════════
 
 NODE_NAME="${CDN_NODE_NAME:-Community CDN Node}"
 TAGLINE="${CDN_NODE_TAGLINE:-by Community Networks}"
-ADMIN_PASSWORD="${CDN_ADMIN_PASSWORD:-admin123}"
 PORT="${CDN_PORT:-8282}"
 MEDIA_ROOT="${CDN_MEDIA_ROOT:-/var/cdn-media}"
 PLATFORM_URL="${CDN_PLATFORM_URL:-}"
@@ -66,21 +68,28 @@ API_KEY="${CDN_API_KEY:-}"
 INSTALL_DIR="/opt/cdn-portal"
 SERVICE_USER="cdnportal"
 
+# Password: use provided value, or auto-generate a secure one
+PASSWORD_GENERATED=false
+if [ -z "$CDN_ADMIN_PASSWORD" ] || [ ${#CDN_ADMIN_PASSWORD} -lt 8 ]; then
+    ADMIN_PASSWORD=$(python3 -c 'import secrets, string; print("".join(secrets.choice(string.ascii_letters + string.digits + "!@#%^&*") for _ in range(16)))')
+    PASSWORD_GENERATED=true
+else
+    ADMIN_PASSWORD="$CDN_ADMIN_PASSWORD"
+fi
+
 # Show configuration
 echo -e "${CYAN}${BOLD}Configuration:${NC}"
 echo -e "  Node Name:      ${BOLD}$NODE_NAME${NC}"
 echo -e "  Tagline:        $TAGLINE"
-echo -e "  Admin Password: ${BOLD}********${NC} (${#ADMIN_PASSWORD} characters)"
+if [ "$PASSWORD_GENERATED" = true ]; then
+    echo -e "  Admin Password: ${YELLOW}(auto-generated — shown at end of install)${NC}"
+else
+    echo -e "  Admin Password: ${BOLD}********${NC} (${#ADMIN_PASSWORD} characters)"
+fi
 echo -e "  Port:           $PORT"
 echo -e "  Media Storage:  $MEDIA_ROOT"
 echo -e "  Platform URL:   ${PLATFORM_URL:-Not configured}"
 echo ""
-
-if [ ${#ADMIN_PASSWORD} -lt 8 ]; then
-    warn "Password is short (${#ADMIN_PASSWORD} chars). Recommend 8+ characters."
-    warn "Using default password 'admin123' - CHANGE THIS AFTER INSTALLATION!"
-    ADMIN_PASSWORD="admin123"
-fi
 
 sleep 2
 
@@ -116,8 +125,10 @@ if [ -f "$(dirname "$0")/../manage.py" ]; then
     cp -r "$PROJECT_DIR"/* "$INSTALL_DIR/"
 else
     info "Cloning from GitHub..."
-    git clone https://github.com/solomonitotia/cdn-raspberrypi.git "$INSTALL_DIR" 2>&1 | grep -v "^Cloning" || true
+    git clone https://github.com/solomonitotia/cdn-raspberrypi.git "$INSTALL_DIR" 2>&1 | grep -v "^Cloning"
 fi
+
+[ -f "$INSTALL_DIR/manage.py" ] || error "Code download failed — $INSTALL_DIR/manage.py not found. Check your internet connection and try again."
 
 log "Portal code downloaded"
 
@@ -218,6 +229,10 @@ else:
 
 log "Database ready"
 
+# Fix ownership — migrations run as root create db.sqlite3 owned by root,
+# but the service runs as $SERVICE_USER and needs write access.
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+
 echo ""
 echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
 echo -e "${CYAN}${BOLD} Installing System Service${NC}"
@@ -268,6 +283,20 @@ else
     warn "Service may have issues. Check logs: sudo journalctl -u cdn-portal -n 50"
 fi
 
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Configuring Firewall${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+if command -v ufw &>/dev/null; then
+    ufw allow "$PORT/tcp" comment "CDN Portal" 2>/dev/null
+    ufw reload 2>/dev/null
+    log "Firewall: port $PORT allowed"
+else
+    warn "ufw not found — make sure port $PORT is open on your firewall manually"
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Success Message
 # ═══════════════════════════════════════════════════════════════════════════
@@ -291,12 +320,12 @@ echo -e "   ${BOLD}Admin Panel:${NC}     http://$LOCAL_IP:$PORT/admin"
 echo ""
 echo -e "${CYAN}${BOLD}🔑 Admin Credentials:${NC}"
 echo -e "   ${BOLD}Username:${NC}        admin"
-echo -e "   ${BOLD}Password:${NC}        $ADMIN_PASSWORD"
+echo -e "   ${BOLD}Password:${NC}        ${GREEN}${BOLD}$ADMIN_PASSWORD${NC}"
 echo ""
 
-if [ "$ADMIN_PASSWORD" = "admin123" ]; then
-    echo -e "${YELLOW}${BOLD}⚠️  IMPORTANT: Change the default password!${NC}"
-    echo -e "   Visit: http://$LOCAL_IP:$PORT/admin/password_change/"
+if [ "$PASSWORD_GENERATED" = true ]; then
+    echo -e "${YELLOW}${BOLD}⚠️  This password was auto-generated. Save it now!${NC}"
+    echo -e "   Change it at: http://$LOCAL_IP:$PORT/admin/password_change/"
     echo ""
 fi
 

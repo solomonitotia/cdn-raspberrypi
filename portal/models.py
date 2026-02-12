@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from portal.storage import DynamicMediaStorage
 import os
 from PIL import Image
 import io
@@ -220,10 +221,11 @@ ICON_CHOICES = [
 
 
 class SiteSettings(models.Model):
-    """Singleton — one row stores portal branding & theme for this CDN node."""
+    """Singleton — one row stores portal branding, theme, and storage config for this CDN node."""
     node_name      = models.CharField(max_length=100, default='Community CDN Node')
     tagline        = models.CharField(max_length=200, default='by Community Networks')
-    logo           = models.ImageField(upload_to='branding/', blank=True, null=True,
+    logo           = models.ImageField(upload_to='branding/', storage=DynamicMediaStorage(),
+                                       blank=True, null=True,
                                        help_text='Replaces the emoji icon in the sidebar')
     auto_extract_colors = models.BooleanField(default=True,
                                               help_text='Automatically extract theme colors from the uploaded logo')
@@ -233,6 +235,12 @@ class SiteSettings(models.Model):
                                       help_text='Darker accent / hover color')
     sidebar_color  = models.CharField(max_length=7, default='#0c111d',
                                       help_text='Sidebar background color')
+    media_root     = models.CharField(max_length=500, blank=True, default='',
+                                      verbose_name='Media Storage Path',
+                                      help_text='Full path where uploaded files are stored '
+                                                '(e.g. /mnt/usb1). Leave empty to use the '
+                                                'system default. Changing this does NOT move '
+                                                'existing files — only new uploads will go here.')
 
     class Meta:
         verbose_name = 'Site Settings'
@@ -282,7 +290,7 @@ class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     description = models.CharField(max_length=255, blank=True)
-    cover_image = models.ImageField(upload_to='covers/', blank=True, null=True)
+    cover_image = models.ImageField(upload_to='covers/', storage=DynamicMediaStorage(), blank=True, null=True)
     icon = models.CharField(max_length=10, default='📁', choices=ICON_CHOICES)
     order = models.PositiveIntegerField(default=0, help_text='Display order')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -337,8 +345,8 @@ class ContentItem(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='items')
-    file = models.FileField(upload_to=content_upload_path)
-    thumbnail = models.ImageField(upload_to='thumbnails/', blank=True, null=True)
+    file = models.FileField(upload_to=content_upload_path, storage=DynamicMediaStorage())
+    thumbnail = models.ImageField(upload_to='thumbnails/', storage=DynamicMediaStorage(), blank=True, null=True)
     file_type = models.CharField(max_length=20, choices=FILE_TYPE_CHOICES, default='other')
     file_size = models.BigIntegerField(default=0, editable=False)
     duration = models.CharField(max_length=20, blank=True, help_text='e.g. 1h 23m')
@@ -444,7 +452,8 @@ class Announcement(models.Model):
     icon = models.CharField(max_length=10, default='📢', help_text='Emoji icon')
 
     # Media attachments
-    media_image = models.ImageField(upload_to='announcements/', blank=True, null=True,
+    media_image = models.ImageField(upload_to='announcements/', storage=DynamicMediaStorage(),
+                                     blank=True, null=True,
                                      help_text='Upload an image/poster for this announcement')
     video_url = models.URLField(blank=True, help_text='Optional video URL (YouTube, Vimeo, or direct MP4 link)')
 
