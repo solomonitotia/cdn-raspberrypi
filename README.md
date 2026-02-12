@@ -27,27 +27,41 @@ A Django-powered offline content delivery network (CDN) for community networks. 
 
 ## 🚀 Quick Start
 
-### **1. Install on Raspberry Pi**
+### **Option 1: Easy Installation (Recommended for Non-Technical Users)**
+
+Run this **single command** on your Raspberry Pi:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/solomonitotia/cdn-raspberrypi/main/scripts/easy-install.sh | sudo bash
+```
+
+The installer will ask you simple questions and set everything up automatically in 5-10 minutes!
+
+📖 **[Full Installation Guide →](INSTALL.md)**
+
+---
+
+### **Option 2: Manual Installation (For Advanced Users)**
 
 ```bash
 # Clone the repository
-git clone <repo-url> ~/cdn-raspberrypi-django
-cd ~/cdn-raspberrypi-django
+git clone https://github.com/solomonitotia/cdn-raspberrypi.git ~/cdn-raspberrypi
+cd ~/cdn-raspberrypi
 
-# Run the deployment script
-bash scripts/deploy-pi.sh
-```
-
-**Environment Variables** (optional, set before running deploy script):
-```bash
+# Set environment variables
 export CDN_NODE_NAME="Athi Community Network"
 export CDN_NODE_TAGLINE="Free offline content"
 export MEDIA_ROOT="/mnt/usb/cdn-media"  # External USB drive
 export CDN_PLATFORM_URL="https://platform.example.com"
 export CDN_API_KEY="your-api-key"
+
+# Run the deployment script
+bash scripts/deploy-pi.sh
 ```
 
-### **2. Access the Portal**
+---
+
+### **Access the Portal**
 
 - **Public Portal:** `http://<raspberry-pi-ip>:8282`
 - **Admin Panel:** `http://<raspberry-pi-ip>:8282/admin`
