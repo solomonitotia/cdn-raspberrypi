@@ -256,7 +256,8 @@ class SiteSettings(models.Model):
                 if self.pk:
                     try:
                         old_instance = SiteSettings.objects.get(pk=self.pk)
-                        logo_changed = old_instance.logo != self.logo
+                        # Compare by filename, not by object identity
+                        logo_changed = old_instance.logo.name != self.logo.name
                     except SiteSettings.DoesNotExist:
                         logo_changed = True
                 else:

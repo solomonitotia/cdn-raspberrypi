@@ -87,3 +87,44 @@ CDN_HEARTBEAT_INTERVAL = int(os.environ.get('CDN_HEARTBEAT_INTERVAL', '60'))
 # Large file uploads
 DATA_UPLOAD_MAX_MEMORY_SIZE = 4 * 1024 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 4 * 1024 * 1024 * 1024
+
+# Logging — write all errors/exceptions to /var/log/cdn-portal/django-errors.log
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': '/var/log/cdn-portal/django-errors.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'ERROR',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['file', 'console'],
+        'level': 'ERROR',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['file', 'console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}

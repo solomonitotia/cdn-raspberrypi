@@ -67,7 +67,22 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Step 2: Apply database migrations
+# Step 2: Install / update Python packages
+# ═══════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo -e "${CYAN}${BOLD} Installing Python Packages${NC}"
+echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
+echo ""
+
+info "Installing/upgrading packages from requirements.txt..."
+sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install \
+    -r "$INSTALL_DIR/requirements.txt" -q 2>&1 | grep -v "^Requirement already" || true
+log "Packages up to date"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Step 3: Apply database migrations
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo ""
@@ -77,26 +92,35 @@ echo -e "${CYAN}${BOLD}───────────────────
 echo ""
 
 info "Running migrations..."
-sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" manage.py migrate --no-input \
-    2>&1 | grep -E "Applying|OK|No migrations" || true
+# Run as cdnportal with the .env loaded so Django has the correct MEDIA_ROOT etc.
+sudo -u "$SERVICE_USER" bash -c "
+    set -a
+    source '$INSTALL_DIR/.env'
+    set +a
+    '$INSTALL_DIR/venv/bin/python' '$INSTALL_DIR/manage.py' migrate --no-input
+" 2>&1
 
-# Fix ownership in case new files were created
+# Fix ownership in case new files were created during migration
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
 log "Database up to date"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Step 3: Collect static files
+# Step 4: Collect static files
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo ""
 info "Collecting static files..."
-sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/python" manage.py collectstatic \
-    --no-input -v 0 2>&1 > /dev/null
+sudo -u "$SERVICE_USER" bash -c "
+    set -a
+    source '$INSTALL_DIR/.env'
+    set +a
+    '$INSTALL_DIR/venv/bin/python' '$INSTALL_DIR/manage.py' collectstatic --no-input -v 0
+" 2>&1 > /dev/null
 log "Static files updated"
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Step 4: Restart service
+# Step 5: Restart service
 # ═══════════════════════════════════════════════════════════════════════════
 
 echo ""
@@ -111,7 +135,9 @@ sleep 3
 if systemctl is-active --quiet cdn-portal.service; then
     log "Service restarted successfully"
 else
-    warn "Service may have issues. Check logs: sudo journalctl -u cdn-portal -n 50"
+    warn "Service may have issues — showing recent error log:"
+    echo ""
+    tail -n 30 /var/log/cdn-portal/error.log 2>/dev/null || journalctl -u cdn-portal -n 30 --no-pager
 fi
 
 LOCAL_IP=$(hostname -I | awk '{print $1}')
@@ -119,4 +145,7 @@ PORT=$(grep -oP '(?<=--bind 0.0.0.0:)\d+' /etc/systemd/system/cdn-portal.service
 
 echo ""
 echo -e "${GREEN}${BOLD}Update complete! Portal is running at http://$LOCAL_IP:$PORT${NC}"
+echo ""
+echo -e "${CYAN}If you're still seeing errors in the admin, check the error log:${NC}"
+echo -e "  sudo tail -n 30 /var/log/cdn-portal/error.log"
 echo ""
