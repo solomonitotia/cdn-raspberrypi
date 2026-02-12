@@ -6,6 +6,21 @@ from django.urls import reverse
 from .models import Category, ContentItem, SiteSettings, Announcement, ICON_CHOICES
 import os
 import shutil
+import concurrent.futures
+
+
+def _disk_usage_safe(path, timeout=2):
+    """
+    Return shutil.disk_usage(path) or None.
+    Uses a thread with a hard timeout so a stuck NFS/USB mount can never
+    block the web request indefinitely.
+    """
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(shutil.disk_usage, path)
+            return future.result(timeout=timeout)
+    except Exception:
+        return None
 
 
 class ColorPickerWidget(forms.TextInput):
@@ -147,10 +162,12 @@ class DrivePickerWidget(forms.TextInput):
                     if not entry.is_dir():
                         continue
                     try:
-                        usage = shutil.disk_usage(entry.path)
+                        usage = _disk_usage_safe(entry.path)
+                        if usage is None:
+                            continue  # mount timed out or errored — skip it
                         # Only list if it's a separate mount from root
-                        root_usage = shutil.disk_usage('/')
-                        if usage.total != root_usage.total:
+                        root_usage = _disk_usage_safe('/')
+                        if root_usage and usage.total != root_usage.total:
                             drives.append({'path': entry.path, 'free': usage.free, 'total': usage.total})
                     except Exception:
                         pass
@@ -160,11 +177,9 @@ class DrivePickerWidget(forms.TextInput):
         from django.conf import settings
         default = str(settings.MEDIA_ROOT)
         if not any(d['path'] == default for d in drives):
-            try:
-                usage = shutil.disk_usage(default)
+            usage = _disk_usage_safe(default)
+            if usage:
                 drives.insert(0, {'path': default, 'free': usage.free, 'total': usage.total, 'default': True})
-            except Exception:
-                pass
         return drives
 
     def render(self, name, value, attrs=None, renderer=None):
@@ -259,24 +274,23 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     def storage_usage(self, obj):
         from portal.storage import _get_media_root
         path = _get_media_root()
-        try:
-            usage = shutil.disk_usage(path)
-            used_pct = (usage.used / usage.total * 100) if usage.total else 0
-            bar_color = '#16a34a' if used_pct < 70 else '#d97706' if used_pct < 90 else '#dc2626'
-            fmt = lambda s: f"{s/1024**3:.1f} GB" if s >= 1024**3 else f"{s/1024**2:.0f} MB"
-            return format_html(
-                '<div style="max-width:400px">'
-                '<p style="margin:0 0 4px;font-size:13px">📂 Path: <strong>{}</strong></p>'
-                '<div style="background:#e5e7eb;border-radius:6px;height:16px;overflow:hidden">'
-                '<div style="background:{};height:100%;width:{:.1f}%"></div></div>'
-                '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'
-                '{} used &nbsp;·&nbsp; {} free &nbsp;·&nbsp; {} total</p>'
-                '</div>',
-                path, bar_color, used_pct,
-                fmt(usage.used), fmt(usage.free), fmt(usage.total)
-            )
-        except Exception:
-            return format_html('<span style="color:#999">Path not accessible: {}</span>', path)
+        usage = _disk_usage_safe(path)
+        if usage is None:
+            return format_html('<span style="color:#999">Path not accessible (or timed out): {}</span>', path)
+        used_pct = (usage.used / usage.total * 100) if usage.total else 0
+        bar_color = '#16a34a' if used_pct < 70 else '#d97706' if used_pct < 90 else '#dc2626'
+        fmt = lambda s: f"{s/1024**3:.1f} GB" if s >= 1024**3 else f"{s/1024**2:.0f} MB"
+        return format_html(
+            '<div style="max-width:400px">'
+            '<p style="margin:0 0 4px;font-size:13px">📂 Path: <strong>{}</strong></p>'
+            '<div style="background:#e5e7eb;border-radius:6px;height:16px;overflow:hidden">'
+            '<div style="background:{};height:100%;width:{:.1f}%"></div></div>'
+            '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'
+            '{} used &nbsp;·&nbsp; {} free &nbsp;·&nbsp; {} total</p>'
+            '</div>',
+            path, bar_color, used_pct,
+            fmt(usage.used), fmt(usage.free), fmt(usage.total)
+        )
     storage_usage.short_description = "Current Storage Usage"
 
 
