@@ -103,6 +103,14 @@ sudo -u "$SERVICE_USER" bash -c "
 # Fix ownership in case new files were created during migration
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
+# Fix media file permissions — directories must be executable, files readable
+MEDIA_ROOT_PATH=$(grep -oP '(?<=^MEDIA_ROOT=)["\x27]?\K[^"'\'']+' "$INSTALL_DIR/.env" 2>/dev/null || echo "/var/cdn-media")
+if [ -d "$MEDIA_ROOT_PATH" ]; then
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$MEDIA_ROOT_PATH"
+    find "$MEDIA_ROOT_PATH" -type d -exec chmod 755 {} +
+    find "$MEDIA_ROOT_PATH" -type f -exec chmod 644 {} +
+fi
+
 log "Database up to date"
 
 # ═══════════════════════════════════════════════════════════════════════════
