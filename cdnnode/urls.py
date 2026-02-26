@@ -5,9 +5,21 @@ from django.views.static import serve as static_serve
 
 
 def _serve_media(request, path):
-    """Serve media files from the dynamically configured media root."""
+    """
+    Serve media files from the dynamically configured media root.
+    Falls back to settings.MEDIA_ROOT so files uploaded before a storage
+    path change (e.g. before an external drive was configured) are still served.
+    """
+    import os
     from portal.storage import _get_media_root
-    return static_serve(request, path, document_root=_get_media_root())
+    primary = _get_media_root()
+    if os.path.exists(os.path.join(primary, path)):
+        return static_serve(request, path, document_root=primary)
+    fallback = str(settings.MEDIA_ROOT)
+    if fallback != primary and os.path.exists(os.path.join(fallback, path)):
+        return static_serve(request, path, document_root=fallback)
+    # Default — will return 404 with the correct media path in the error
+    return static_serve(request, path, document_root=primary)
 
 
 urlpatterns = [
