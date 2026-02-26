@@ -4,13 +4,21 @@ fetch('/api/stats/')
   .then(data => {
     const bar  = document.getElementById('storage-bar');
     const text = document.getElementById('storage-text');
+    const label = document.getElementById('storage-label');
     if (!bar) return;
     const pct = data.disk_total > 0
       ? Math.min(100, (data.disk_used / data.disk_total) * 100)
       : 0;
     bar.style.width = pct + '%';
     bar.style.background = pct > 85 ? '#ef4444' : pct > 65 ? '#f59e0b' : '#2563eb';
-    text.textContent = formatBytes(data.disk_used) + ' used';
+    text.textContent = formatBytes(data.disk_used) + ' / ' + formatBytes(data.disk_total);
+    // Show drive path as tooltip / label if it's an external drive
+    if (label && data.media_path && data.media_path !== '/var/cdn-media') {
+      const parts = data.media_path.split('/');
+      const driveName = parts[2] || 'external';  // /media/<name>/...
+      label.textContent = '💾 ' + driveName.toUpperCase();
+      label.title = data.media_path;
+    }
   })
   .catch(() => {
     const text = document.getElementById('storage-text');
