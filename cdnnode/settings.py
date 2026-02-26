@@ -9,6 +9,10 @@ DEBUG = os.environ.get('DEBUG', 'true').lower() == 'true'
 
 ALLOWED_HOSTS = ['*']  # Pi serves to local network
 
+# Disable COOP header — this portal runs over plain HTTP on a local network.
+# The browser warns if this header is sent over non-HTTPS origins.
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
