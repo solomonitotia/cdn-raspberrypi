@@ -249,6 +249,13 @@ class SiteSettings(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
 
+        # Auto-create the media directory when a custom path is configured
+        if self.media_root and self.media_root.strip():
+            try:
+                os.makedirs(self.media_root.strip(), exist_ok=True)
+            except Exception:
+                pass  # Best-effort; failure surfaced by storage_usage widget
+
         # Auto-extract colors from logo if enabled and logo is new/changed
         if self.auto_extract_colors and self.logo:
             try:

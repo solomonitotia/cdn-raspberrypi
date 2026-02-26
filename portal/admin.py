@@ -186,6 +186,10 @@ class DrivePickerWidget(forms.TextInput):
         text_html = super().render(name, value, attrs, renderer)
         drives = self._detect_drives()
         uid = (attrs or {}).get('id', f'id_{name}')
+        picker_id = f'{uid}_picker'
+        prefix_id = f'{uid}_prefix'
+        sub_id    = f'{uid}_sub'
+        preview_id = f'{uid}_preview'
 
         if not drives:
             drive_html = '<p style="color:#666;font-size:13px;margin:8px 0">No drives detected. Enter a path manually above.</p>'
@@ -197,11 +201,21 @@ class DrivePickerWidget(forms.TextInput):
                 label = d['path']
                 if d.get('default'):
                     label += ' (system default)'
+                # On click: highlight button, show subfolder picker, set prefix
                 btns.append(
                     f'<button type="button" '
-                    f'onclick="var f=document.getElementById(\'{uid}\');f.value=\'{d["path"]}\';'
-                    f'this.closest(\'div\').querySelectorAll(\'button\').forEach(b=>b.style.borderColor=\'#e2e8f0\');'
-                    f'this.style.borderColor=\'#2563eb\';" '
+                    f'onclick="'
+                    f'this.closest(\'div\').querySelectorAll(\'button.dpk-btn\').forEach(b=>b.style.borderColor=\'#e2e8f0\');'
+                    f'this.style.borderColor=\'#2563eb\';'
+                    f'var pk=document.getElementById(\'{picker_id}\');'
+                    f'var pr=document.getElementById(\'{prefix_id}\');'
+                    f'var sb=document.getElementById(\'{sub_id}\');'
+                    f'pr.textContent=\'{d["path"]}/\';'
+                    f'pk.style.display=\'block\';'
+                    f'sb.focus();'
+                    f'var fv=document.getElementById(\'{uid}\');'
+                    f'fv.value=\'{d["path"]}/\'+sb.value;" '
+                    f'class="dpk-btn" '
                     f'style="display:block;width:100%;text-align:left;padding:8px 12px;margin:4px 0;'
                     f'border:2px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer;font-size:13px;">'
                     f'💾 <strong>{label}</strong> &nbsp;'
@@ -211,8 +225,37 @@ class DrivePickerWidget(forms.TextInput):
                 )
             drive_html = ''.join(btns)
 
+        # Subfolder picker panel (hidden until a drive is clicked)
+        folder_picker = (
+            f'<div id="{picker_id}" style="display:none;margin-top:10px;padding:12px;'
+            f'background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">'
+            f'<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#166534">'
+            f'📁 Choose a folder name on this drive:</p>'
+            f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+            f'<code id="{prefix_id}" style="font-size:13px;color:#374151;background:#e5e7eb;'
+            f'padding:4px 8px;border-radius:4px">/media/</code>'
+            f'<input id="{sub_id}" type="text" value="cdn-media" placeholder="folder-name" '
+            f'oninput="'
+            f'var p=document.getElementById(\'{prefix_id}\').textContent;'
+            f'var full=p+this.value;'
+            f'document.getElementById(\'{uid}\').value=full;'
+            f'document.getElementById(\'{preview_id}\').textContent=full;" '
+            f'style="border:1px solid #6ee7b7;border-radius:6px;padding:4px 10px;'
+            f'font-family:monospace;font-size:13px;width:160px;background:#fff" />'
+            f'<button type="button" '
+            f'onclick="document.getElementById(\'{picker_id}\').style.display=\'none\';" '
+            f'style="padding:4px 14px;background:#16a34a;color:#fff;border:none;'
+            f'border-radius:6px;cursor:pointer;font-size:13px">✓ Apply</button>'
+            f'</div>'
+            f'<p style="margin:6px 0 0;font-size:12px;color:#15803d">'
+            f'Full path: <code id="{preview_id}" style="background:#dcfce7;padding:2px 6px;border-radius:4px"></code>'
+            f'&nbsp;— This folder will be <strong>created automatically</strong> when you save.</p>'
+            f'</div>'
+        )
+
         return mark_safe(
             text_html +
+            folder_picker +
             '<div style="margin-top:10px">'
             '<p style="font-weight:600;font-size:13px;margin:0 0 4px;color:#374151">🔍 Detected drives — click to select:</p>'
             + drive_html +
@@ -273,7 +316,12 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     def storage_usage(self, obj):
         from portal.storage import _get_media_root
+        import os as _os
         path = _get_media_root()
+        if not _os.path.exists(path):
+            return format_html(
+                '<span style="color:#d97706">⚠️ Path does not exist yet: <strong>{}</strong> — '
+                'it will be created automatically when you save.</span>', path)
         usage = _disk_usage_safe(path)
         if usage is None:
             return format_html('<span style="color:#999">Path not accessible (or timed out): {}</span>', path)
