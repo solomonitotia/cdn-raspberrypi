@@ -116,14 +116,21 @@ echo -e "${CYAN}${BOLD} Downloading Portal Code${NC}"
 echo -e "${CYAN}${BOLD}────────────────────────────────────────────────────────${NC}"
 echo ""
 
-mkdir -p "$INSTALL_DIR"
-
 if [ -f "$(dirname "$0")/../manage.py" ]; then
+    # Local development copy — always clear and recopy
     info "Copying from local repository..."
+    rm -rf "$INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR"
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
     cp -r "$PROJECT_DIR"/* "$INSTALL_DIR/"
 else
+    if [ -d "$INSTALL_DIR" ]; then
+        warn "Existing installation found at $INSTALL_DIR — removing for clean reinstall..."
+        systemctl stop cdn-portal 2>/dev/null || true
+        rm -rf "$INSTALL_DIR"
+    fi
+    mkdir -p "$INSTALL_DIR"
     info "Cloning from GitHub..."
     git clone https://github.com/solomonitotia/cdn-raspberrypi.git "$INSTALL_DIR" 2>&1 | grep -v "^Cloning"
 fi
