@@ -145,6 +145,59 @@ else
     info "User '$SERVICE_USER' already exists"
 fi
 
+# ── Detect external drive and redirect media storage ────────────────────────
+SERVICE_UID=$(id -u "$SERVICE_USER")
+SERVICE_GID=$(id -g "$SERVICE_USER")
+ROOT_DEV=$(stat -c %d / 2>/dev/null)
+EXT_DRIVE=""
+EXT_DRIVE_DEV=""
+EXT_DRIVE_FS=""
+
+for base in /mnt /media; do
+    [ -d "$base" ] || continue
+    for dir in "$base"/*/; do
+        [ -d "$dir" ] || continue
+        dir="${dir%/}"
+        dir_dev=$(stat -c %d "$dir" 2>/dev/null)
+        # Skip if same device as root filesystem
+        [ "$dir_dev" = "$ROOT_DEV" ] && continue
+        EXT_DRIVE="$dir"
+        EXT_DRIVE_DEV=$(findmnt -n -o SOURCE "$dir" 2>/dev/null || echo "")
+        EXT_DRIVE_FS=$(findmnt -n -o FSTYPE  "$dir" 2>/dev/null || echo "")
+        break 2
+    done
+done
+
+if [ -n "$EXT_DRIVE" ]; then
+    info "External drive detected: $EXT_DRIVE (${EXT_DRIVE_FS:-unknown fs})"
+
+    # Update /etc/fstab to mount with cdnportal's uid/gid so it can write files
+    if [ -n "$EXT_DRIVE_DEV" ] && grep -q "$EXT_DRIVE" /etc/fstab 2>/dev/null; then
+        # Replace existing uid/gid in the fstab entry
+        sed -i "/$EXT_DRIVE/s/uid=[0-9]*/uid=$SERVICE_UID/g;/$EXT_DRIVE/s/gid=[0-9]*/gid=$SERVICE_GID/g" /etc/fstab
+        log "Updated fstab mount options for $EXT_DRIVE"
+    elif [ -n "$EXT_DRIVE_DEV" ]; then
+        # Add a new fstab entry
+        if echo "$EXT_DRIVE_FS" | grep -qE "^ntfs|^fuseblk"; then
+            echo "$EXT_DRIVE_DEV $EXT_DRIVE ntfs-3g uid=$SERVICE_UID,gid=$SERVICE_GID,umask=0022,nofail,defaults 0 0" >> /etc/fstab
+        else
+            echo "$EXT_DRIVE_DEV $EXT_DRIVE $EXT_DRIVE_FS uid=$SERVICE_UID,gid=$SERVICE_GID,nofail,defaults 0 0" >> /etc/fstab
+        fi
+        log "Added fstab entry for $EXT_DRIVE"
+    fi
+
+    # Remount to apply new uid/gid
+    umount "$EXT_DRIVE" 2>/dev/null || true
+    mount "$EXT_DRIVE" 2>/dev/null || true
+
+    # Use the external drive for media storage
+    MEDIA_ROOT="$EXT_DRIVE/cdn-media"
+    mkdir -p "$MEDIA_ROOT"
+    chown "$SERVICE_USER:$SERVICE_USER" "$MEDIA_ROOT"
+    chmod 755 "$MEDIA_ROOT"
+    log "Media storage → $MEDIA_ROOT  ($(df -h --output=avail "$EXT_DRIVE" 2>/dev/null | tail -1 | tr -d ' ') free)"
+fi
+
 mkdir -p "$MEDIA_ROOT" /var/log/cdn-portal
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" "$MEDIA_ROOT" /var/log/cdn-portal
 chmod 755 "$MEDIA_ROOT"

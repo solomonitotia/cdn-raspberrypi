@@ -116,12 +116,13 @@ def recent(request):
 
 @require_GET
 def api_stats(request):
+    from portal.storage import _get_media_root
     categories = Category.objects.prefetch_related('items').all()
     total_size = sum(c.total_size for c in categories)
-    max_size = settings.MEDIA_ROOT
+    media_path = _get_media_root()
     try:
         import shutil
-        disk = shutil.disk_usage(str(settings.MEDIA_ROOT))
+        disk = shutil.disk_usage(media_path)
         disk_total = disk.total
         disk_used = disk.used
     except Exception:
@@ -130,6 +131,7 @@ def api_stats(request):
 
     return JsonResponse({
         'node_name': settings.CDN_NODE_NAME,
+        'media_path': media_path,
         'categories': [
             {
                 'name': c.name,
