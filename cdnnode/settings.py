@@ -89,6 +89,11 @@ CDN_HEARTBEAT_INTERVAL = int(os.environ.get('CDN_HEARTBEAT_INTERVAL', '60'))
 DATA_UPLOAD_MAX_MEMORY_SIZE = 4 * 1024 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 4 * 1024 * 1024 * 1024
 
+# Ensure log directory exists before configuring file handler
+import os as _os
+_LOG_DIR = '/var/log/cdn-portal'
+_os.makedirs(_LOG_DIR, exist_ok=True)
+
 # Logging — write all errors/exceptions to /var/log/cdn-portal/django-errors.log
 LOGGING = {
     'version': 1,
