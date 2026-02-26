@@ -78,9 +78,9 @@ def _send_heartbeat():
             headers={'X-CDN-API-Key': api_key},
             timeout=10,
         )
-        logger.debug('Heartbeat sent: %s', response.status_code)
+        logger.info('Heartbeat sent: %s', response.status_code)
     except requests.exceptions.ConnectionError:
-        logger.warning('Heartbeat: cannot reach platform')
+        logger.error('Heartbeat: cannot reach platform at %s', platform_url)
     except Exception as e:
         logger.error('Heartbeat error: %s', e)
 

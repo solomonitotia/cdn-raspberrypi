@@ -71,7 +71,7 @@ SERVICE_USER="cdnportal"
 # Password: use provided value, or auto-generate a secure one
 PASSWORD_GENERATED=false
 if [ -z "$CDN_ADMIN_PASSWORD" ] || [ ${#CDN_ADMIN_PASSWORD} -lt 8 ]; then
-    ADMIN_PASSWORD=$(python3 -c 'import secrets, string; print("".join(secrets.choice(string.ascii_letters + string.digits + "!@#%^&*") for _ in range(16)))')
+    ADMIN_PASSWORD=$(python3 -c 'import secrets, string; print("".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)))')
     PASSWORD_GENERATED=true
 else
     ADMIN_PASSWORD="$CDN_ADMIN_PASSWORD"
@@ -217,15 +217,23 @@ info "Collecting static files..."
 python manage.py collectstatic --no-input -v 0 2>&1 > /dev/null
 
 info "Creating admin user..."
-python manage.py shell -c "
+DJANGO_ADMIN_PASSWORD="$ADMIN_PASSWORD" python manage.py shell -c "
+import os
 from django.contrib.auth import get_user_model
 User = get_user_model()
+password = os.environ['DJANGO_ADMIN_PASSWORD']
 if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@localhost', '$ADMIN_PASSWORD')
-    print('✓ Admin user created')
+    User.objects.create_superuser('admin', 'admin@localhost', password)
+    print('Admin user created')
 else:
-    print('ℹ Admin user already exists')
+    u = User.objects.get(username='admin')
+    u.set_password(password)
+    u.save()
+    print('Admin password updated')
 " 2>&1 | tail -1
+
+# Mark that the admin must change password on first login
+touch "$INSTALL_DIR/.password_change_required"
 
 log "Database ready"
 

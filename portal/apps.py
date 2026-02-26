@@ -7,8 +7,11 @@ class PortalConfig(AppConfig):
 
     def ready(self):
         import os
-        # Only start heartbeat in the main process (not during migrations or management commands)
-        if os.environ.get('RUN_MAIN') == 'true' or not os.environ.get('DJANGO_SETTINGS_MODULE'):
+        # Skip during management commands (migrate, collectstatic, shell, etc.)
+        # RUN_MAIN=true is set by Django's dev reloader in the child process — allow it.
+        # Skip only when there's no settings module (direct import without Django context).
+        import sys
+        if any(cmd in sys.argv for cmd in ('migrate', 'collectstatic', 'shell', 'makemigrations', 'createsuperuser')):
             return
         from . import heartbeat
         heartbeat.start()
