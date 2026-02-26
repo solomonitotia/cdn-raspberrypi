@@ -433,6 +433,39 @@ class ContentItem(models.Model):
         return os.path.splitext(self.file.name)[1].lower() if self.file else ''
 
     @property
+    def preview_type(self):
+        """Returns the best preview method for the template to use."""
+        if self.file_type == 'video':
+            return 'video'
+        if self.file_type == 'audio':
+            return 'audio'
+        if self.file_type == 'image':
+            return 'image'
+        ext = self.file_extension
+        if ext == '.pdf':
+            return 'pdf'
+        if ext in {'.txt', '.md', '.csv', '.log', '.json', '.xml', '.htm', '.html'}:
+            return 'text'
+        return 'none'
+
+    @property
+    def doc_type_label(self):
+        """Human-readable file type label based on extension."""
+        labels = {
+            '.pdf': 'PDF Document', '.doc': 'Word Document', '.docx': 'Word Document',
+            '.ppt': 'PowerPoint Presentation', '.pptx': 'PowerPoint Presentation',
+            '.xls': 'Excel Spreadsheet', '.xlsx': 'Excel Spreadsheet',
+            '.epub': 'eBook', '.txt': 'Text File', '.md': 'Markdown Document',
+            '.csv': 'CSV Data File', '.odt': 'OpenDocument Text',
+            '.exe': 'Windows Executable', '.deb': 'Debian Package',
+            '.apk': 'Android App', '.dmg': 'macOS Installer',
+            '.zip': 'ZIP Archive', '.tar': 'TAR Archive',
+            '.gz': 'Compressed Archive', '.rar': 'RAR Archive',
+        }
+        ext = self.file_extension
+        return labels.get(ext, (ext.lstrip('.').upper() + ' File') if ext else 'File')
+
+    @property
     def tag_list(self):
         return [t.strip() for t in self.tags.split(',') if t.strip()]
 

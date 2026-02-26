@@ -9,37 +9,61 @@
 
   <!-- Player / Viewer -->
   <div class="detail-main">
-    <div class="player-wrap">
-      {% if item.file_type == 'video' %}
+    <div class="player-wrap{% if item.preview_type == 'none' %} player-wrap--doc{% elif item.preview_type == 'text' %} player-wrap--text{% endif %}">
+      {% if item.preview_type == 'video' %}
         <video controls autoplay class="media-player" preload="metadata">
           <source src="{{ item.file.url }}">
           Your browser does not support video.
         </video>
 
-      {% elif item.file_type == 'audio' %}
+      {% elif item.preview_type == 'audio' %}
         {% if item.thumbnail %}
           <img src="{{ item.thumbnail.url }}" class="audio-cover" alt="{{ item.title }}">
         {% else %}
-          <div class="audio-cover-placeholder">🎵</div>
+          <div class="audio-cover-placeholder">&#127925;</div>
         {% endif %}
         <audio controls autoplay class="audio-player">
           <source src="{{ item.file.url }}">
         </audio>
 
-      {% elif item.file_type == 'image' %}
+      {% elif item.preview_type == 'image' %}
         <img src="{{ item.file.url }}" class="image-viewer" alt="{{ item.title }}">
 
-      {% elif item.file_type == 'document' and item.file_extension == '.pdf' %}
-        <iframe src="{{ item.file.url }}" class="pdf-viewer" title="{{ item.title }}"></iframe>
+      {% elif item.preview_type == 'pdf' %}
+        <iframe src="{{ item.file.url }}" class="pdf-viewer" title="{{ item.title }}">
+          <div class="doc-preview-card">
+            <p>Your browser cannot display this PDF inline.</p>
+            <a href="{{ item.file.url }}" class="btn-primary">Open PDF directly</a>
+          </div>
+        </iframe>
+
+      {% elif item.preview_type == 'text' %}
+        <div class="text-viewer-wrap">
+          <div class="text-viewer-toolbar">
+            <span class="doc-ext-badge">{{ item.file_extension|upper }}</span>
+            <span class="text-viewer-label">Text Preview</span>
+            <a href="{{ item.file.url }}" target="_blank" class="text-viewer-open">Open in new tab &#8599;</a>
+          </div>
+          <iframe src="{{ item.file.url }}" class="text-viewer" title="{{ item.title }}"></iframe>
+        </div>
 
       {% else %}
-        <div class="no-preview">
-          <div class="no-preview-icon">
-            {% if item.file_type == 'software' %}💾{% else %}📁{% endif %}
+        <!-- No inline preview: office docs, archives, software, etc. -->
+        <div class="doc-preview-card">
+          <div class="doc-svg-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" width="90" height="110" fill="none">
+              <rect x="2" y="2" width="60" height="76" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2.5"/>
+              <path d="M42 2 L62 22 L42 22 Z" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5" stroke-linejoin="round"/>
+              <rect x="12" y="34" width="28" height="3.5" rx="1.75" fill="#94a3b8"/>
+              <rect x="12" y="44" width="38" height="3.5" rx="1.75" fill="#94a3b8"/>
+              <rect x="12" y="54" width="20" height="3.5" rx="1.75" fill="#94a3b8"/>
+            </svg>
           </div>
-          <p>No preview available</p>
-          <a href="{{ item.file.url }}" class="btn-primary" download="{{ item.title }}">
-            ⬇ Download {{ item.title }}
+          <div class="doc-ext-badge">{{ item.file_extension|upper }}</div>
+          <p class="doc-type-label">{{ item.doc_type_label }}</p>
+          <p class="doc-no-preview-msg">No browser preview available for this file type.</p>
+          <a href="{{ item.file.url }}" class="btn-primary doc-dl-btn" download="{{ item.title }}">
+            &#8681; Download to view
           </a>
         </div>
       {% endif %}
