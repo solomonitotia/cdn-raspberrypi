@@ -318,6 +318,25 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         from portal.storage import _get_media_root
         import os as _os
         path = _get_media_root()
+
+        # Count existing files in the current path (to warn if changing)
+        file_count = 0
+        total_size = 0
+        if _os.path.exists(path):
+            try:
+                for dirpath, _dirs, files in _os.walk(path):
+                    for f in files:
+                        if f.startswith('.'):
+                            continue
+                        try:
+                            fsize = _os.path.getsize(_os.path.join(dirpath, f))
+                            total_size += fsize
+                            file_count += 1
+                        except OSError:
+                            pass
+            except Exception:
+                pass
+
         if not _os.path.exists(path):
             return format_html(
                 '<span style="color:#d97706">⚠️ Path does not exist yet: <strong>{}</strong> — '
@@ -328,16 +347,39 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         used_pct = (usage.used / usage.total * 100) if usage.total else 0
         bar_color = '#16a34a' if used_pct < 70 else '#d97706' if used_pct < 90 else '#dc2626'
         fmt = lambda s: f"{s/1024**3:.1f} GB" if s >= 1024**3 else f"{s/1024**2:.0f} MB"
+
+        # Build existing-files warning if there are files here
+        files_warning = ''
+        if file_count > 0:
+            files_warning = format_html(
+                '<div style="margin-top:10px;padding:10px 12px;background:#fef9c3;'
+                'border:1px solid #fde047;border-radius:8px">'
+                '<p style="margin:0;font-size:13px;color:#854d0e">'
+                '⚠️ <strong>{} file{}</strong> ({}) exist at this path. '
+                'If you select a <em>different</em> folder above and save, '
+                'those files will <strong>stay here</strong> and their download URLs '
+                'will return 404. <br>'
+                'To safely move: use <code>rsync -a {}/ &lt;new-path&gt;/</code> '
+                'via SSH <em>before</em> changing this setting.</p>'
+                '</div>',
+                file_count,
+                's' if file_count != 1 else '',
+                fmt(total_size),
+                path,
+            )
+
         return format_html(
-            '<div style="max-width:400px">'
+            '<div style="max-width:500px">'
             '<p style="margin:0 0 4px;font-size:13px">📂 Path: <strong>{}</strong></p>'
             '<div style="background:#e5e7eb;border-radius:6px;height:16px;overflow:hidden">'
             '<div style="background:{};height:100%;width:{:.1f}%"></div></div>'
             '<p style="margin:4px 0 0;font-size:12px;color:#6b7280">'
             '{} used &nbsp;·&nbsp; {} free &nbsp;·&nbsp; {} total</p>'
+            '{}'
             '</div>',
             path, bar_color, used_pct,
-            fmt(usage.used), fmt(usage.free), fmt(usage.total)
+            fmt(usage.used), fmt(usage.free), fmt(usage.total),
+            files_warning,
         )
     storage_usage.short_description = "Current Storage Usage"
 
