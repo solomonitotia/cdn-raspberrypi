@@ -288,6 +288,19 @@ else:
 # Mark that the admin must change password on first login
 touch "$INSTALL_DIR/.password_change_required"
 
+# Save credentials to a file (readable only by root and the service user)
+cat > "$INSTALL_DIR/.admin-credentials" <<CREDEOF
+CDN Portal Admin Credentials
+=============================
+Username : admin
+Password : $ADMIN_PASSWORD
+Portal   : http://$(hostname -I | awk '{print $1}'):$PORT
+Admin    : http://$(hostname -I | awk '{print $1}'):$PORT/admin
+
+To view again: sudo cat $INSTALL_DIR/.admin-credentials
+CREDEOF
+chmod 640 "$INSTALL_DIR/.admin-credentials"
+
 log "Database ready"
 
 # Fix ownership — migrations run as root create db.sqlite3 owned by root,
@@ -390,10 +403,30 @@ if [ "$PASSWORD_GENERATED" = true ]; then
     echo ""
 fi
 
+if [ "$PASSWORD_GENERATED" = true ]; then
+    echo -e "${CYAN}${BOLD}💾 Credentials saved to:${NC}  ${BOLD}$INSTALL_DIR/.admin-credentials${NC}"
+    echo -e "   View any time:   ${BOLD}sudo cat $INSTALL_DIR/.admin-credentials${NC}"
+    echo ""
+fi
+
 echo -e "${CYAN}${BOLD}🛠️ Useful Commands:${NC}"
 echo -e "   Check status:    ${BOLD}sudo systemctl status cdn-portal${NC}"
 echo -e "   View logs:       ${BOLD}sudo journalctl -u cdn-portal -f${NC}"
 echo -e "   Restart:         ${BOLD}sudo systemctl restart cdn-portal${NC}"
 echo ""
+
+if [ -z "$PLATFORM_URL" ]; then
+    echo -e "${YELLOW}${BOLD}⚠️  Platform not connected${NC}"
+    echo -e "   This node is not linked to a CN Platform yet."
+    echo -e "   To connect it:"
+    echo -e "   1. Register this node on your CN Platform → CDN Nodes page"
+    echo -e "   2. Copy the API key shown after registration"
+    echo -e "   3. Run:"
+    echo -e "      ${BOLD}sudo sed -i 's|CDN_PLATFORM_URL=.*|CDN_PLATFORM_URL=\"<platform-url>\"|' $INSTALL_DIR/.env${NC}"
+    echo -e "      ${BOLD}sudo sed -i 's|CDN_API_KEY=.*|CDN_API_KEY=\"<api-key>\"|' $INSTALL_DIR/.env${NC}"
+    echo -e "      ${BOLD}sudo systemctl restart cdn-portal${NC}"
+    echo ""
+fi
+
 echo -e "${GREEN}Setup complete! Your portal is ready to use. 🌐${NC}"
 echo ""
