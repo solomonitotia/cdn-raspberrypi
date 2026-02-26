@@ -18,7 +18,8 @@ _stop_event = threading.Event()
 def _get_storage_info():
     try:
         import shutil
-        disk = shutil.disk_usage(str(settings.MEDIA_ROOT))
+        from portal.storage import _get_media_root
+        disk = shutil.disk_usage(_get_media_root())
         return {
             'total': disk.total,
             'used': disk.used,
