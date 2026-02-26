@@ -326,7 +326,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=$MEDIA_ROOT /var/log/cdn-portal $INSTALL_DIR
+ReadWritePaths=${EXT_DRIVE:+$EXT_DRIVE }$MEDIA_ROOT /var/log/cdn-portal $INSTALL_DIR
 
 [Install]
 WantedBy=multi-user.target
